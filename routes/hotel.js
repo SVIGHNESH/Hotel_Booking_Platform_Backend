@@ -201,6 +201,34 @@ router.put('/bookings/:id/status', requireHotelVerification, validateObjectId, a
 
 // TODO: Add remaining hotel routes for rooms, reviews, analytics, etc.
 
+// TEMPORARY: Auto-verify hotel for testing
+router.post('/verify-for-testing', async (req, res) => {
+  try {
+    const hotel = await Hotel.findOne({ userId: req.user._id });
+    if (!hotel) {
+      return res.status(404).json({
+        success: false,
+        message: 'Hotel profile not found'
+      });
+    }
+
+    hotel.isVerified = true;
+    hotel.verifiedAt = new Date();
+    await hotel.save();
+
+    res.json({
+      success: true,
+      message: 'Hotel verified for testing'
+    });
+  } catch (error) {
+    logger.error('Auto-verify hotel error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+});
+
 // @route   GET /api/hotel/rooms
 // @desc    Get hotel rooms
 // @access  Private (Hotel)
@@ -222,7 +250,7 @@ router.get('/rooms', async (req, res) => {
     if (isAvailable !== undefined) query.isAvailable = isAvailable === 'true';
 
     const rooms = await Room.find(query)
-      .sort({ roomNumber: 1 })
+      .sort({ name: 1, createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
 
@@ -256,33 +284,44 @@ router.get('/rooms', async (req, res) => {
 // @access  Private (Hotel)
 router.post('/rooms', requireHotelVerification, roomValidation, async (req, res) => {
   try {
+    logger.info('Adding room request:', { userId: req.user._id, body: req.body });
+    
     const hotel = await Hotel.findOne({ userId: req.user._id });
     if (!hotel) {
+      logger.error('Hotel profile not found for user:', req.user._id);
       return res.status(404).json({
         success: false,
         message: 'Hotel profile not found'
       });
     }
 
-    // Check if room number already exists for this hotel
+    logger.info('Hotel found:', { hotelId: hotel._id, name: hotel.name });
+
+    // Check if room name already exists for this hotel
     const existingRoom = await Room.findOne({
       hotelId: hotel._id,
-      roomNumber: req.body.roomNumber
+      name: req.body.name
     });
 
     if (existingRoom) {
+      logger.warn('Room name already exists:', { hotelId: hotel._id, roomName: req.body.name });
       return res.status(400).json({
         success: false,
-        message: 'Room number already exists for this hotel'
+        message: 'Room name already exists for this hotel'
       });
     }
 
-    const room = new Room({
+    const roomData = {
       ...req.body,
       hotelId: hotel._id
-    });
+    };
 
+    logger.info('Creating room with data:', roomData);
+
+    const room = new Room(roomData);
     await room.save();
+
+    logger.info('Room created successfully:', { roomId: room._id, name: room.name });
 
     res.status(201).json({
       success: true,
@@ -294,7 +333,8 @@ router.post('/rooms', requireHotelVerification, roomValidation, async (req, res)
     logger.error('Add room error:', error);
     res.status(500).json({
       success: false,
-      message: 'Server error adding room'
+      message: 'Server error adding room',
+      error: error.message
     });
   }
 });

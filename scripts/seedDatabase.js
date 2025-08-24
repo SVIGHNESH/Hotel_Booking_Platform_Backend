@@ -40,6 +40,33 @@ const seedDatabase = async () => {
       console.log('Password: (unchanged)');
     }
 
+    // Create test customer user
+    const testCustomerEmail = 'customer@example.com';
+    const testCustomerPassword = 'customer123';
+
+    const existingCustomer = await User.findOne({ email: testCustomerEmail });
+    if (!existingCustomer) {
+      const customerUser = new User({
+        email: testCustomerEmail,
+        password: testCustomerPassword,
+        role: 'customer',
+        isVerified: true,
+        isActive: true,
+        firstName: 'John',
+        lastName: 'Doe',
+        phone: '9876543210'
+      });
+
+      await customerUser.save();
+      console.log('✅ Test customer created successfully!');
+      console.log('📧 Email:', testCustomerEmail);
+      console.log('🔒 Password:', testCustomerPassword);
+    } else {
+      console.log('Test customer already exists');
+      console.log('Email:', testCustomerEmail);
+      console.log('Password: (unchanged)');
+    }
+
     // Create test hotel for verification
     const testHotelEmail = 'testhotel@example.com';
     const testHotelPassword = 'hotel123';
@@ -93,9 +120,47 @@ const seedDatabase = async () => {
           count: 0
         },
         isVerified: false, // This will be pending verification
+        verificationStatus: 'approved', // Set as approved for testing
         isActive: true
       });
 
+      await hotel.save();
+
+      // Create some sample rooms for the approved hotel
+      const Room = require('../models/Room');
+      
+      const rooms = [
+        {
+          hotelId: hotel._id,
+          name: 'Deluxe Room',
+          description: 'Spacious room with city view and modern amenities',
+          type: 'deluxe',
+          maxOccupancy: 2,
+          pricePerNight: 3500,
+          amenities: ['AC', 'TV', 'WiFi', 'Mini Bar'],
+          images: ['https://images.unsplash.com/photo-1631049307264-da0ec9d70304?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'],
+          isAvailable: true,
+          totalRooms: 10
+        },
+        {
+          hotelId: hotel._id,
+          name: 'Executive Suite',
+          description: 'Luxurious suite with separate living area and premium amenities',
+          type: 'suite',
+          maxOccupancy: 4,
+          pricePerNight: 6500,
+          amenities: ['AC', 'TV', 'WiFi', 'Mini Bar', 'Balcony', 'Room Service'],
+          images: ['https://images.unsplash.com/photo-1590490360182-c33d57733427?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'],
+          isAvailable: true,
+          totalRooms: 5
+        }
+      ];
+
+      // Save rooms to the hotel
+      const savedRooms = await Room.insertMany(rooms);
+      
+      // Update hotel with room references
+      hotel.rooms = savedRooms.map(room => room._id);
       await hotel.save();
 
       console.log('🏨 Test hotel user created successfully!');

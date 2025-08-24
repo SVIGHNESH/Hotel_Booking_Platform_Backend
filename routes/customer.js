@@ -129,6 +129,84 @@ router.post('/profile/image', profileImageUpload.single('profileImage'), async (
   }
 });
 
+// @route   GET /api/customer/hotels
+// @desc    Get all approved hotels
+// @access  Private (Customer)
+router.get('/hotels', async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      location,
+      minPrice,
+      maxPrice,
+      minRating
+    } = req.query;
+
+    const skip = (page - 1) * limit;
+    const filter = { 
+      isVerified: true,
+      isActive: true 
+    };
+
+    // Add location filter if provided
+    if (location) {
+      filter.$or = [
+        { 'address.city': { $regex: location, $options: 'i' } },
+        { 'address.state': { $regex: location, $options: 'i' } },
+        { name: { $regex: location, $options: 'i' } }
+      ];
+    }
+
+    // Add price range filter
+    if (minPrice || maxPrice) {
+      filter['priceRange'] = {};
+      if (minPrice) filter['priceRange']['$gte'] = { min: parseInt(minPrice) };
+      if (maxPrice) filter['priceRange']['$lte'] = { max: parseInt(maxPrice) };
+    }
+
+    // Add rating filter
+    if (minRating) {
+      filter['rating.average'] = { $gte: parseFloat(minRating) };
+    }
+
+    const hotels = await Hotel.find(filter)
+      .select('-__v')
+      .sort({ 'rating.average': -1, createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get rooms for each hotel
+    const hotelsWithRooms = await Promise.all(hotels.map(async (hotel) => {
+      const rooms = await Room.find({ hotelId: hotel._id, isAvailable: true });
+      return {
+        ...hotel.toObject(),
+        rooms: rooms || []
+      };
+    }));
+
+    const total = await Hotel.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: hotelsWithRooms,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get hotels error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error retrieving hotels'
+    });
+  }
+});
+
 // @route   GET /api/customer/hotels/search
 // @desc    Search hotels with filters
 // @access  Private (Customer)
