@@ -171,6 +171,20 @@ const hotelSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  verifiedAt: {
+    type: Date
+  },
+  verifiedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  rejectionReason: {
+    type: String,
+    maxlength: 500
+  },
+  rejectedAt: {
+    type: Date
+  },
   isActive: {
     type: Boolean,
     default: true

@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const Hotel = require('../models/Hotel');
 
 // Verify JWT token
 const auth = async (req, res, next) => {
@@ -102,8 +103,56 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
+// Check if hotel is verified (for hotel role users)
+const requireHotelVerification = async (req, res, next) => {
+  try {
+    // Only apply this check to hotel role users
+    if (req.user.role !== 'hotel') {
+      return next();
+    }
+
+    // Find the hotel associated with this user
+    const hotel = await Hotel.findOne({ userId: req.user._id });
+    if (!hotel) {
+      return res.status(404).json({
+        success: false,
+        message: 'Hotel profile not found. Please complete your hotel registration.'
+      });
+    }
+
+    // Check if hotel is verified
+    if (!hotel.isVerified) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your hotel is pending admin verification. You cannot perform this action until your hotel is approved.',
+        verificationStatus: 'pending'
+      });
+    }
+
+    // Check if hotel is active
+    if (!hotel.isActive) {
+      return res.status(403).json({
+        success: false,
+        message: 'Your hotel account has been deactivated. Please contact support.',
+        verificationStatus: 'deactivated'
+      });
+    }
+
+    // Add hotel info to request for easy access
+    req.hotel = hotel;
+    next();
+  } catch (error) {
+    console.error('Hotel verification middleware error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during hotel verification check.'
+    });
+  }
+};
+
 module.exports = {
   auth,
   authorize,
-  optionalAuth
+  optionalAuth,
+  requireHotelVerification
 };

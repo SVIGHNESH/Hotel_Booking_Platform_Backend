@@ -179,18 +179,95 @@ router.get('/hotels', async (req, res) => {
   }
 });
 
-// @route   PUT /api/admin/hotels/:id/verify
-// @desc    Verify hotel
+// @route   GET /api/admin/hotels/pending
+// @desc    Get pending hotel verifications
 // @access  Private (Admin)
-router.put('/hotels/:id/verify', validateObjectId, async (req, res) => {
+router.get('/hotels/pending', async (req, res) => {
   try {
-    const { isVerified } = req.body;
+    const { page = 1, limit = 10 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const hotel = await Hotel.findByIdAndUpdate(
-      req.params.id,
-      { isVerified },
-      { new: true }
-    );
+    const pendingHotels = await Hotel.find({ isVerified: false })
+      .populate('userId', 'email createdAt')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Hotel.countDocuments({ isVerified: false });
+
+    res.json({
+      success: true,
+      data: {
+        hotels: pendingHotels,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalHotels: total,
+          hasNext: parseInt(page) < Math.ceil(total / parseInt(limit)),
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get pending hotels error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching pending hotels'
+    });
+  }
+});
+
+// @route   GET /api/admin/hotels
+// @desc    Get all hotels with verification status
+// @access  Private (Admin)
+router.get('/hotels', async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status = 'all' } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    let filter = {};
+    if (status === 'verified') filter.isVerified = true;
+    if (status === 'pending') filter.isVerified = false;
+
+    const hotels = await Hotel.find(filter)
+      .populate('userId', 'email createdAt')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Hotel.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: {
+        hotels,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalHotels: total,
+          hasNext: parseInt(page) < Math.ceil(total / parseInt(limit)),
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get hotels error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching hotels'
+    });
+  }
+});
+
+// @route   GET /api/admin/hotels/:id
+// @desc    Get hotel details for verification
+// @access  Private (Admin)
+router.get('/hotels/:id', validateObjectId, async (req, res) => {
+  try {
+    const hotel = await Hotel.findById(req.params.id)
+      .populate('userId', 'email createdAt lastLogin');
 
     if (!hotel) {
       return res.status(404).json({
@@ -201,7 +278,63 @@ router.put('/hotels/:id/verify', validateObjectId, async (req, res) => {
 
     res.json({
       success: true,
-      message: `Hotel ${isVerified ? 'verified' : 'unverified'} successfully`,
+      data: hotel
+    });
+
+  } catch (error) {
+    logger.error('Get hotel details error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching hotel details'
+    });
+  }
+});
+
+// @route   PUT /api/admin/hotels/:id/verify
+// @desc    Verify or reject hotel
+// @access  Private (Admin)
+router.put('/hotels/:id/verify', validateObjectId, async (req, res) => {
+  try {
+    const { isVerified, rejectionReason } = req.body;
+
+    if (isVerified === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification status is required'
+      });
+    }
+
+    const updateData = { 
+      isVerified,
+      verifiedAt: isVerified ? new Date() : undefined,
+      verifiedBy: req.user._id
+    };
+
+    // If rejecting, add rejection reason
+    if (!isVerified && rejectionReason) {
+      updateData.rejectionReason = rejectionReason;
+      updateData.rejectedAt = new Date();
+    }
+
+    const hotel = await Hotel.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true }
+    ).populate('userId', 'email');
+
+    if (!hotel) {
+      return res.status(404).json({
+        success: false,
+        message: 'Hotel not found'
+      });
+    }
+
+    // TODO: Send email notification to hotel about verification status
+    // await sendVerificationEmail(hotel.userId.email, isVerified, rejectionReason);
+
+    res.json({
+      success: true,
+      message: `Hotel ${isVerified ? 'verified' : 'rejected'} successfully`,
       data: hotel
     });
 
@@ -210,6 +343,48 @@ router.put('/hotels/:id/verify', validateObjectId, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Server error verifying hotel'
+    });
+  }
+});
+
+// @route   PUT /api/admin/hotels/:id/status
+// @desc    Activate/Deactivate hotel
+// @access  Private (Admin)
+router.put('/hotels/:id/status', validateObjectId, async (req, res) => {
+  try {
+    const { isActive } = req.body;
+
+    if (isActive === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Active status is required'
+      });
+    }
+
+    const hotel = await Hotel.findByIdAndUpdate(
+      req.params.id,
+      { isActive },
+      { new: true }
+    ).populate('userId', 'email');
+
+    if (!hotel) {
+      return res.status(404).json({
+        success: false,
+        message: 'Hotel not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Hotel ${isActive ? 'activated' : 'deactivated'} successfully`,
+      data: hotel
+    });
+
+  } catch (error) {
+    logger.error('Update hotel status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error updating hotel status'
     });
   }
 });
