@@ -710,3 +710,75 @@
 {"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-24 19:07:59"}
 {"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-24 19:08:03"}
 {"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-24 19:08:03"}
+{"level":"info","message":"Connected to MongoDB","service":"hotel-booking-api","timestamp":"2025-08-24 19:08:41"}
+{"level":"info","message":"Connected to MongoDB","service":"hotel-booking-api","timestamp":"2025-08-25 09:30:20"}
+{"level":"info","message":"Server running on port 5000","service":"hotel-booking-api","timestamp":"2025-08-25 09:30:20"}
+{"level":"info","message":"Connected to MongoDB","service":"hotel-booking-api","timestamp":"2025-08-25 09:30:39"}
+{"level":"info","message":"GET /favicon.ico - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:31:30"}
+{"level":"info","message":"GET /api/auth/me - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:31:34"}
+{"level":"info","message":"GET /api/auth/me - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:31:35"}
+{"level":"info","message":"POST /api/auth/login - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:54:58"}
+{"level":"info","message":"GET /api/customer/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:54:59"}
+{"level":"info","message":"GET /api/customer/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:54:59"}
+{"level":"info","message":"GET /api/customer/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:11"}
+{"level":"info","message":"GET /api/customer/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:11"}
+{"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:16"}
+{"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:16"}
+{"level":"info","message":"GET /api/customer/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:24"}
+{"level":"info","message":"GET /api/customer/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:24"}
+{"level":"info","message":"POST /api/auth/login - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:38"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:39"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:39"}
+{"level":"info","message":"GET /api/hotel/rooms - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:41"}
+{"level":"info","message":"GET /api/hotel/rooms - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:41"}
+{"level":"info","message":"GET /api/hotel/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:41"}
+{"level":"info","message":"GET /api/hotel/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:55:41"}
+{"level":"info","message":"POST /api/hotel/rooms - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:10"}
+{"body":{"amenities":["Air Conditioning","WiFi","TV","Mini Bar","Safe"],"capacity":{"adults":2,"children":0},"description":"This room has the Window view","name":"qwerty","pricing":{"basePrice":12324,"currency":"INR"},"roomType":"Standard","size":{"unit":"sqft","value":5000},"totalRooms":1},"level":"info","message":"Adding room request:","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:10","userId":"68a9cb65103c1903e383d8c8"}
+{"hotelId":"68a9cb65103c1903e383d8ca","level":"info","message":"Hotel found:","name":"THIS dot ARCH","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:10"}
+{"amenities":["Air Conditioning","WiFi","TV","Mini Bar","Safe"],"capacity":{"adults":2,"children":0},"description":"This room has the Window view","hotelId":"68a9cb65103c1903e383d8ca","level":"info","message":"Creating room with data:","name":"qwerty","pricing":{"basePrice":12324,"currency":"INR"},"roomType":"Standard","service":"hotel-booking-api","size":{"unit":"sqft","value":5000},"timestamp":"2025-08-25 09:57:10","totalRooms":1}
+{"level":"info","message":"Room created successfully:","name":"qwerty","roomId":"68abe61ee435d02098d4ccef","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:10"}
+{"level":"info","message":"GET /api/hotel/rooms - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:11"}
+{"level":"info","message":"GET /api/hotel/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:11"}
+{"level":"info","message":"GET /api/auth/me - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:34"}
+{"level":"info","message":"GET /api/auth/me - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:34"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:34"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:34"}
+{"level":"info","message":"GET /api/auth/me - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:38"}
+{"level":"info","message":"GET /api/auth/me - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:38"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:56"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:57:56"}
+{"level":"info","message":"POST /api/auth/register - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 09:58:58"}
+{"code":16755,"index":0,"level":"error","message":"Registration error: Can't extract geo keys: { _id: ObjectId('68abe68be435d02098d4cd0c'), userId: ObjectId('68abe68ae435d02098d4cd0a'), firstName: \"qwerty\", lastName: \"ytrew\", phone: \"+917518925362\", preferences: { location: { radius: 10 }, notifications: { email: true, sms: false } }, profileImage: null, loyaltyPoints: 0, createdAt: new Date(1756096139196), updatedAt: new Date(1756096139196), __v: 0 }  Point must only contain numeric elements, instead got type missing","service":"hotel-booking-api","stack":"MongoServerError: Can't extract geo keys: { _id: ObjectId('68abe68be435d02098d4cd0c'), userId: ObjectId('68abe68ae435d02098d4cd0a'), firstName: \"qwerty\", lastName: \"ytrew\", phone: \"+917518925362\", preferences: { location: { radius: 10 }, notifications: { email: true, sms: false } }, profileImage: null, loyaltyPoints: 0, createdAt: new Date(1756096139196), updatedAt: new Date(1756096139196), __v: 0 }  Point must only contain numeric elements, instead got type missing\n    at /home/vighnesh/Desktop/Hotel-Booking-Portal/backend/node_modules/mongodb/lib/operations/insert.js:50:33\n    at /home/vighnesh/Desktop/Hotel-Booking-Portal/backend/node_modules/mongodb/lib/operations/command.js:84:64\n    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)","timestamp":"2025-08-25 09:58:59"}
+{"level":"info","message":"POST /api/auth/login - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:01:21"}
+{"level":"info","message":"GET /api/customer/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:01:22"}
+{"level":"info","message":"GET /api/customer/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:01:22"}
+{"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:01:39"}
+{"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:01:39"}
+{"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:02:02"}
+{"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:02:02"}
+{"level":"info","message":"POST /api/auth/login - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:02:44"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:02:45"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:02:45"}
+{"level":"info","message":"GET /api/hotel/rooms - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:02:48"}
+{"level":"info","message":"GET /api/hotel/rooms - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:02:48"}
+{"level":"info","message":"GET /api/hotel/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:02:48"}
+{"level":"info","message":"GET /api/hotel/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:02:48"}
+{"level":"info","message":"GET /api/auth/me - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:06"}
+{"level":"info","message":"GET /api/auth/me - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:06"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:06"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:06"}
+{"level":"info","message":"GET /api/hotel/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:09"}
+{"level":"info","message":"GET /api/hotel/bookings - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:09"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:12"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:12"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:14"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:14"}
+{"level":"info","message":"GET /api/auth/me - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:24"}
+{"level":"info","message":"GET /api/auth/me - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:24"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:24"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:24"}
+{"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:25"}
+{"level":"info","message":"GET /api/customer/hotels - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:03:25"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:04:55"}
+{"level":"info","message":"GET /api/hotel/profile - ::1","service":"hotel-booking-api","timestamp":"2025-08-25 10:04:55"}
