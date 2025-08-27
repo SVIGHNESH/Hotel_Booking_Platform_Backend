@@ -13,8 +13,7 @@ const adminRoutes = require('./routes/admin');
 const { errorHandler } = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
 
-const app = express();
-
+const app = express()
 // Security middleware
 app.use(helmet());
 app.use(cors({
