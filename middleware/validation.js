@@ -113,9 +113,11 @@ const hotelProfileValidation = [
     .notEmpty()
     .withMessage('ZIP code is required'),
   body('address.coordinates.coordinates')
+    .optional()
     .isArray({ min: 2, max: 2 })
     .withMessage('Coordinates must be an array of [longitude, latitude]'),
   body('address.coordinates.coordinates.*')
+    .optional()
     .isNumeric()
     .withMessage('Coordinates must be numeric'),
   body('contactInfo.phone')

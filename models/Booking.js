@@ -150,6 +150,16 @@ const bookingSchema = new mongoose.Schema({
       enum: ['credit_card', 'debit_card', 'paypal', 'stripe', 'bank_transfer']
     },
     stripePaymentIntentId: String
+    ,
+    depositAmount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    depositPaid: {
+      type: Boolean,
+      default: false
+    }
   },
   status: {
     type: String,
@@ -203,6 +213,22 @@ const bookingSchema = new mongoose.Schema({
     method: {
       type: String,
       enum: ['email', 'sms']
+    }
+  }]
+  ,
+  additionalRequests: [{
+    requestType: {
+      type: String,
+      enum: ['special', 'housekeeping', 'other'],
+      default: 'special'
+    },
+    note: {
+      type: String,
+      maxlength: 500
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
     }
   }]
 }, {

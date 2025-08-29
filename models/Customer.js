@@ -93,7 +93,11 @@ const customerSchema = new mongoose.Schema({
     type: Number,
     default: 0,
     min: 0
-  }
+  },
+  favorites: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Hotel'
+  }]
 }, {
   timestamps: true
 });

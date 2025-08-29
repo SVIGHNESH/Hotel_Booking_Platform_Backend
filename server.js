@@ -14,6 +14,8 @@ const { errorHandler } = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
 
 const app = express()
+// Enable trust proxy for environments (e.g., local dev with some proxies, future deployment behind reverse proxy)
+app.set('trust proxy', 1);
 // Security middleware
 app.use(helmet());
 app.use(cors({
@@ -24,7 +26,13 @@ app.use(cors({
 // Rate limiting
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req, res) => {
+    // Prefer real IP from Express, fallback to remote address
+    return req.ip || req.connection?.remoteAddress || 'unknown';
+  }
 });
 app.use(limiter);
 

@@ -52,60 +52,119 @@ router.get('/profile', async (req, res) => {
 // @access  Private (Hotel)
 router.put('/profile', requireHotelVerification, hotelProfileValidation, async (req, res) => {
   try {
+    // Normalize incoming payload from frontend shape to backend schema
+    const payload = { ...req.body };
+
+    // Frontend user may send policies.checkIn / policies.checkOut or custom fields
+    if (payload.policies) {
+      if (payload.policies.checkIn) payload.checkInTime = payload.policies.checkIn;
+      if (payload.policies.checkOut) payload.checkOutTime = payload.policies.checkOut;
+      // Map additional nested policies to existing schema fields
+      if (payload.policies.cancellationPolicy) {
+        payload.policies.cancellation = payload.policies.cancellationPolicy;
+        delete payload.policies.cancellationPolicy;
+      }
+      if (payload.policies.petPolicy) {
+        payload.policies.pets = typeof payload.policies.petPolicy === 'string' ? payload.policies.petPolicy : 'Pets policy updated';
+        delete payload.policies.petPolicy;
+      }
+      if (payload.policies.smokingPolicy) {
+        // No direct field; ignore or extend schema later
+        delete payload.policies.smokingPolicy;
+      }
+      // Remove unmapped keys to avoid strict mode issues
+      if (payload.policies.checkIn) delete payload.policies.checkIn;
+      if (payload.policies.checkOut) delete payload.policies.checkOut;
+    }
+
+    // Ensure priceRange has required fields
+    if (payload.priceRange) {
+      if (payload.priceRange.min == null) payload.priceRange.min = 0;
+      if (payload.priceRange.max == null) payload.priceRange.max = payload.priceRange.min;
+      if (!payload.priceRange.currency) payload.priceRange.currency = 'INR';
+    }
+
+    // Normalize amenities values (frontend may send variants not in enum)
+    if (Array.isArray(payload.amenities)) {
+      const allowed = new Set([
+        'WiFi','Parking','Pool','Gym','Spa','Restaurant','Bar','Room Service','Laundry','Pet Friendly','Business Center','Conference Room','Airport Shuttle','Concierge','Air Conditioning','Heating'
+      ]);
+      const mapping = {
+        'Free WiFi': 'WiFi',
+        'Swimming Pool': 'Pool',
+        'Fitness Center': 'Gym',
+        'Laundry Service': 'Laundry',
+        'Bar/Lounge': 'Bar',
+        'Conference Room': 'Conference Room',
+        'Pet Friendly': 'Pet Friendly',
+        'Airport Shuttle': 'Airport Shuttle'
+      };
+      payload.amenities = payload.amenities
+        .map(a => mapping[a] || a)
+        .filter(a => allowed.has(a))
+        .filter((v,i,arr) => arr.indexOf(v) === i);
+    }
+
+    // If address sent without coordinates, prevent overwriting existing coordinates with undefined
+    if (payload.address && (!payload.address.coordinates || !payload.address.coordinates.coordinates)) {
+      delete payload.address.coordinates; // keep existing
+    }
+
     const hotel = await Hotel.findOneAndUpdate(
       { userId: req.user._id },
-      { ...req.body },
+      payload,
       { new: true, runValidators: true }
     );
 
     if (!hotel) {
-      return res.status(404).json({
-        success: false,
-        message: 'Hotel profile not found'
-      });
+      return res.status(404).json({ success: false, message: 'Hotel profile not found' });
     }
 
-    res.json({
-      success: true,
-      message: 'Hotel profile updated successfully',
-      data: hotel
-    });
-
+    res.json({ success: true, message: 'Hotel profile updated successfully', data: hotel });
   } catch (error) {
     logger.error('Update hotel profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error updating hotel profile'
-    });
+    res.status(500).json({ success: false, message: 'Server error updating hotel profile' });
   }
 });
 
 // @route   GET /api/hotel/bookings
 // @desc    Get hotel bookings
 // @access  Private (Hotel)
+// Helper: map backend status (snake_case) to frontend (kebab-case)
+const mapStatusForFrontend = (status) => {
+  const mapping = {
+    'checked_in': 'checked-in',
+    'checked_out': 'checked-out',
+    'no_show': 'no-show'
+  };
+  return mapping[status] || status; // pending, confirmed, rejected, cancelled, completed unchanged (or mapped directly)
+};
+
+// Helper: normalize status coming from frontend to backend format
+const normalizeStatusFromFrontend = (status) => {
+  const mapping = {
+    'checked-in': 'checked_in',
+    'checked-out': 'checked_out',
+    'no-show': 'no_show'
+  };
+  return mapping[status] || status;
+};
+
 router.get('/bookings', async (req, res) => {
   try {
     const { page = 1, limit = 10, status, startDate, endDate } = req.query;
 
     const hotel = await Hotel.findOne({ userId: req.user._id });
     if (!hotel) {
-      return res.status(404).json({
-        success: false,
-        message: 'Hotel profile not found'
-      });
+      return res.status(404).json({ success: false, message: 'Hotel profile not found' });
     }
 
     let query = { hotelId: hotel._id };
-    
     if (status) {
-      query.status = status;
+      query.status = normalizeStatusFromFrontend(status);
     }
-
     if (startDate && endDate) {
-      query['bookingDetails.checkIn'] = {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate)
-      };
+      query['bookingDetails.checkIn'] = { $gte: new Date(startDate), $lte: new Date(endDate) };
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -114,15 +173,52 @@ router.get('/bookings', async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('customerId', 'firstName lastName phone')
+      .populate({
+        path: 'customerId',
+        select: 'firstName lastName phone userId',
+        populate: { path: 'userId', select: 'email' }
+      })
       .populate('roomId', 'roomType name');
 
     const total = await Booking.countDocuments(query);
 
+    // Transform bookings into frontend-friendly structure
+    const transformed = bookings.map(b => {
+      const totalGuests = (b.bookingDetails?.guests?.adults || 0) + (b.bookingDetails?.guests?.children || 0) + (b.bookingDetails?.guests?.infants || 0);
+      return {
+        id: b._id.toString(),
+        bookingNumber: b.bookingReference,
+        bookingDate: b.createdAt,
+        checkIn: b.bookingDetails?.checkIn,
+        checkOut: b.bookingDetails?.checkOut,
+        checkInDate: b.bookingDetails?.checkIn, // calendar compatibility
+        checkOutDate: b.bookingDetails?.checkOut,
+        nights: b.bookingDetails?.totalNights,
+        status: mapStatusForFrontend(b.status),
+        totalAmount: b.pricing?.totalAmount,
+        amountPaid: b.pricing?.totalAmount, // assuming paid fully
+        paymentStatus: b.pricing?.paymentStatus || 'pending',
+        source: 'website',
+        guests: totalGuests,
+        customer: {
+          name: `${b.customerId?.firstName || ''} ${b.customerId?.lastName || ''}`.trim(),
+            email: b.customerId?.userId?.email || 'n/a',
+            phone: b.customerId?.phone
+        },
+        room: {
+          number: b.roomId?.name || 'N/A',
+          type: b.roomId?.roomType || 'N/A'
+        },
+        roomId: b.roomId?._id?.toString(),
+        createdAt: b.createdAt,
+        updatedAt: b.updatedAt
+      };
+    });
+
     res.json({
       success: true,
       data: {
-        bookings,
+        bookings: transformed,
         pagination: {
           currentPage: parseInt(page),
           totalPages: Math.ceil(total / parseInt(limit)),
@@ -130,15 +226,94 @@ router.get('/bookings', async (req, res) => {
           hasNext: parseInt(page) < Math.ceil(total / parseInt(limit)),
           hasPrev: parseInt(page) > 1
         }
-      }
+      },
+      // Backward compatibility for existing frontend code using data.bookings OR top-level bookings
+      bookings: transformed
     });
-
   } catch (error) {
     logger.error('Get hotel bookings error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching bookings'
-    });
+    res.status(500).json({ success: false, message: 'Server error fetching bookings' });
+  }
+});
+
+// Booking action handlers to align with frontend endpoints
+const validActionStatusMap = {
+  confirm: 'confirmed',
+  'check-in': 'checked_in',
+  'check-out': 'checked_out'
+};
+
+router.post('/bookings/:id/:action', requireHotelVerification, validateObjectId, async (req, res) => {
+  try {
+    const { action } = req.params;
+    if (!Object.keys(validActionStatusMap).includes(action)) {
+      return res.status(400).json({ success: false, message: 'Invalid booking action' });
+    }
+
+    const hotel = await Hotel.findOne({ userId: req.user._id });
+    if (!hotel) {
+      return res.status(404).json({ success: false, message: 'Hotel profile not found' });
+    }
+
+    const booking = await Booking.findOne({ _id: req.params.id, hotelId: hotel._id });
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Basic state guardrails
+    if (action === 'confirm' && booking.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Only pending bookings can be confirmed' });
+    }
+    if (action === 'check-in' && !['confirmed', 'checked_in'].includes(booking.status)) {
+      return res.status(400).json({ success: false, message: 'Booking must be confirmed before check-in' });
+    }
+    if (action === 'check-out' && booking.status !== 'checked_in') {
+      return res.status(400).json({ success: false, message: 'Booking must be checked-in before check-out' });
+    }
+
+    booking.status = validActionStatusMap[action];
+    if (action === 'confirm') booking.confirmedAt = new Date();
+    if (action === 'check-in') booking.checkInDetails.actualCheckIn = new Date();
+    if (action === 'check-out') booking.checkOutDetails.actualCheckOut = new Date();
+
+    await booking.save();
+
+    res.json({ success: true, message: `Booking ${action} successful`, status: mapStatusForFrontend(booking.status) });
+  } catch (error) {
+    logger.error('Booking action error:', error);
+    res.status(500).json({ success: false, message: 'Server error processing booking action' });
+  }
+});
+
+// Dedicated cancel endpoint matching frontend expectation
+router.post('/bookings/:id/cancel', requireHotelVerification, validateObjectId, async (req, res) => {
+  try {
+    const { reason, refundAmount } = req.body;
+    const hotel = await Hotel.findOne({ userId: req.user._id });
+    if (!hotel) return res.status(404).json({ success: false, message: 'Hotel profile not found' });
+
+    const booking = await Booking.findOne({ _id: req.params.id, hotelId: hotel._id });
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    if (!['pending', 'confirmed'].includes(booking.status)) {
+      return res.status(400).json({ success: false, message: 'Only pending or confirmed bookings can be cancelled' });
+    }
+
+    booking.status = 'cancelled';
+    booking.cancellation.isCancelled = true;
+    booking.cancellation.cancelledAt = new Date();
+    booking.cancellation.cancelledBy = 'hotel';
+    booking.cancellation.reason = reason || 'Cancelled by hotel';
+    if (refundAmount !== undefined) {
+      booking.cancellation.refundAmount = refundAmount;
+      booking.cancellation.refundStatus = refundAmount > 0 ? 'pending' : undefined;
+    }
+    await booking.save();
+
+    res.json({ success: true, message: 'Booking cancelled successfully', status: 'cancelled' });
+  } catch (error) {
+    logger.error('Cancel booking error:', error);
+    res.status(500).json({ success: false, message: 'Server error cancelling booking' });
   }
 });
 
@@ -296,6 +471,19 @@ router.post('/rooms', requireHotelVerification, roomValidation, async (req, res)
     }
 
     logger.info('Hotel found:', { hotelId: hotel._id, name: hotel.name });
+
+    // Normalize legacy amenity labels coming from older frontend builds
+    if (Array.isArray(req.body.amenities)) {
+      const amenityMap = {
+        'AC': 'Air Conditioning',
+        'Room Service': undefined, // not in enum; drop
+        'Jacuzzi': 'Bathtub' // approximate mapping if desired
+      };
+      req.body.amenities = req.body.amenities
+        .map(a => amenityMap[a] === undefined ? a : amenityMap[a])
+        .filter(a => a) // remove any explicitly dropped values
+        .filter((v, i, arr) => arr.indexOf(v) === i); // dedupe
+    }
 
     // Check if room name already exists for this hotel
     const existingRoom = await Room.findOne({

@@ -137,6 +137,11 @@ const roomSchema = new mongoose.Schema({
     required: [true, 'Total rooms count is required'],
     min: 1
   },
+  status: {
+    type: String,
+    enum: ['ready', 'occupied', 'maintenance', 'blocked', 'cleaning'],
+    default: 'ready'
+  },
   floor: {
     type: Number,
     min: 0
