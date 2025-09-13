@@ -389,6 +389,245 @@ router.put('/hotels/:id/status', validateObjectId, async (req, res) => {
   }
 });
 
+// @route   GET /api/admin/bookings
+// @desc    Get all bookings for admin review
+// @access  Private (Admin)
+router.get('/bookings', async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status, hotelId } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    let filter = {};
+    if (status) filter.status = status;
+    if (hotelId) filter.hotelId = hotelId;
+
+    const bookings = await Booking.find(filter)
+      .populate('customerId', 'firstName lastName email')
+      .populate('hotelId', 'name address')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Booking.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: {
+        bookings,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalBookings: total,
+          hasNext: parseInt(page) < Math.ceil(total / parseInt(limit)),
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get admin bookings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching bookings'
+    });
+  }
+});
+
+// @route   GET /api/admin/reviews
+// @desc    Get all reviews for moderation
+// @access  Private (Admin)
+router.get('/reviews', async (req, res) => {
+  try {
+    const { page = 1, limit = 10, rating } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    let filter = {};
+    if (rating) filter.rating = parseInt(rating);
+
+    const reviews = await Review.find(filter)
+      .populate('customerId', 'firstName lastName')
+      .populate('hotelId', 'name')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Review.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: {
+        reviews,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalReviews: total,
+          hasNext: parseInt(page) < Math.ceil(total / parseInt(limit)),
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get admin reviews error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching reviews'
+    });
+  }
+});
+
+// @route   GET /api/admin/grievances
+// @desc    Get all grievances for resolution
+// @access  Private (Admin)
+router.get('/grievances', async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    let filter = {};
+    if (status) filter.status = status;
+
+    const grievances = await Grievance.find(filter)
+      .populate('customerId', 'firstName lastName email')
+      .populate('hotelId', 'name')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Grievance.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: {
+        grievances,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages: Math.ceil(total / parseInt(limit)),
+          totalGrievances: total,
+          hasNext: parseInt(page) < Math.ceil(total / parseInt(limit)),
+          hasPrev: parseInt(page) > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get admin grievances error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching grievances'
+    });
+  }
+});
+
+// @route   PUT /api/admin/grievances/:id/status
+// @desc    Update grievance status
+// @access  Private (Admin)
+router.put('/grievances/:id/status', validateObjectId, async (req, res) => {
+  try {
+    const { status, response } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Status is required'
+      });
+    }
+
+    const grievance = await Grievance.findByIdAndUpdate(
+      req.params.id,
+      { 
+        status,
+        ...(response && { adminResponse: response, respondedAt: new Date() })
+      },
+      { new: true }
+    );
+
+    if (!grievance) {
+      return res.status(404).json({
+        success: false,
+        message: 'Grievance not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Grievance status updated successfully',
+      data: grievance
+    });
+
+  } catch (error) {
+    logger.error('Update grievance status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error updating grievance status'
+    });
+  }
+});
+
+// @route   GET /api/admin/analytics
+// @desc    Get analytics data for admin dashboard
+// @access  Private (Admin)
+router.get('/analytics', async (req, res) => {
+  try {
+    const { period = '30d' } = req.query;
+    
+    const now = new Date();
+    let startDate;
+    
+    switch (period) {
+      case '7d':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case '30d':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        break;
+      case '90d':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        break;
+      default:
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+
+    const [
+      totalRevenue,
+      totalBookings,
+      newCustomers,
+      newHotels,
+      avgRating
+    ] = await Promise.all([
+      Booking.aggregate([
+        { $match: { createdAt: { $gte: startDate }, status: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$pricing.totalAmount' } } }
+      ]),
+      Booking.countDocuments({ createdAt: { $gte: startDate } }),
+      User.countDocuments({ role: 'customer', createdAt: { $gte: startDate } }),
+      Hotel.countDocuments({ createdAt: { $gte: startDate } }),
+      Review.aggregate([
+        { $group: { _id: null, avgRating: { $avg: '$rating' } } }
+      ])
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        revenue: totalRevenue[0]?.total || 0,
+        bookings: totalBookings,
+        newCustomers,
+        newHotels,
+        averageRating: avgRating[0]?.avgRating || 0,
+        period
+      }
+    });
+
+  } catch (error) {
+    logger.error('Get analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error fetching analytics'
+    });
+  }
+});
+
 // TODO: Add remaining admin routes for bookings, reviews, grievances, analytics
 
 module.exports = router;
