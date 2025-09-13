@@ -102,7 +102,7 @@ const customerSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Create index for location-based queries
-customerSchema.index({ 'preferences.location': '2dsphere' });
+// Create index for location-based queries (sparse so docs without coordinates won't fail)
+customerSchema.index({ 'preferences.location': '2dsphere' }, { sparse: true });
 
 module.exports = mongoose.model('Customer', customerSchema);
