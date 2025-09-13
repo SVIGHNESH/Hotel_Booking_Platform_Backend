@@ -102,7 +102,9 @@ const customerSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Create index for location-based queries (sparse so docs without coordinates won't fail)
-customerSchema.index({ 'preferences.location': '2dsphere' }, { sparse: true });
+// Note: we intentionally avoid creating a 2dsphere index here to prevent
+// errors when documents are inserted without numeric coordinates. If you
+// need geospatial queries, create a proper 2dsphere index in the DB with
+// correct documents (e.g., {'preferences.location': { type: 'Point', coordinates: [lon, lat] }}).
 
 module.exports = mongoose.model('Customer', customerSchema);
