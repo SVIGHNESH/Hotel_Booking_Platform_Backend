@@ -1157,3 +1157,9 @@
 {"level":"info","message":"Server running on port 5000","service":"hotel-booking-api","timestamp":"2025-09-13 22:32:59"}
 {"level":"info","message":"Connected to MongoDB","service":"hotel-booking-api","timestamp":"2025-09-13 22:40:16"}
 {"level":"info","message":"Server running on port 5000","service":"hotel-booking-api","timestamp":"2025-09-13 22:40:16"}
+{"level":"info","message":"Connected to MongoDB","service":"hotel-booking-api","timestamp":"2025-09-13 23:04:22"}
+{"level":"info","message":"Connected to MongoDB","service":"hotel-booking-api","timestamp":"2025-09-13 23:04:24"}
+{"level":"info","message":"Server running on port 5000","service":"hotel-booking-api","timestamp":"2025-09-13 23:04:24"}
+{"level":"info","message":"GET /api/auth/me - 127.0.0.1","service":"hotel-booking-api","timestamp":"2025-09-13 23:05:41"}
+{"level":"info","message":"GET /api/auth/me - 127.0.0.1","service":"hotel-booking-api","timestamp":"2025-09-13 23:06:23"}
+{"level":"info","message":"Connected to MongoDB","service":"hotel-booking-api","timestamp":"2025-09-13 23:07:11"}
