@@ -433,6 +433,106 @@ router.get('/bookings', async (req, res) => {
   }
 });
 
+// @route   PUT /api/admin/bookings/:id/status
+// @desc    Update booking status (admin action)
+// @access  Private (Admin)
+router.put('/bookings/:id/status', async (req, res) => {
+  try {
+    const { status, note } = req.body;
+    if (!status) {
+      return res.status(400).json({ success: false, message: 'Status is required' });
+    }
+
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    booking.status = status;
+    if (note) booking.adminNote = note;
+    if (status === 'cancelled') {
+      booking.cancellation = booking.cancellation || {};
+      booking.cancellation.isCancelled = true;
+      booking.cancellation.cancelledAt = new Date();
+      booking.cancellation.cancelledBy = 'admin';
+      booking.cancellation.reason = note || 'Cancelled by admin';
+    }
+
+    await booking.save();
+
+    res.json({ success: true, message: 'Booking status updated', data: booking });
+  } catch (error) {
+    logger.error('Admin update booking status error:', error);
+    res.status(500).json({ success: false, message: 'Server error updating booking status' });
+  }
+});
+
+// @route   POST /api/admin/bookings/:id/refund
+// @desc    Record/process a refund for a booking
+// @access  Private (Admin)
+router.post('/bookings/:id/refund', async (req, res) => {
+  try {
+    const { amount, reason } = req.body;
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    // Record refund details on booking.cancellation or booking.pricing
+    booking.cancellation = booking.cancellation || {};
+    booking.cancellation.refundAmount = amount || booking.cancellation.refundAmount || 0;
+    booking.cancellation.refundStatus = 'processed';
+    booking.cancellation.refundReason = reason || 'Admin refund';
+
+    // Update payment status
+    booking.pricing.paymentStatus = booking.pricing.paymentStatus === 'paid' ? 'refunded' : booking.pricing.paymentStatus;
+
+    await booking.save();
+
+    // TODO: Integrate with payment gateway to actually process money transfer.
+
+    res.json({ success: true, message: 'Refund recorded', data: booking });
+  } catch (error) {
+    logger.error('Admin refund booking error:', error);
+    res.status(500).json({ success: false, message: 'Server error processing refund' });
+  }
+});
+
+// @route   PUT /api/admin/reviews/:id/moderate
+// @desc    Moderate a review (approve/reject/remove)
+// @access  Private (Admin)
+router.put('/reviews/:id/moderate', async (req, res) => {
+  try {
+    const { action, reason } = req.body; // action: 'approve' | 'reject' | 'remove'
+    const review = await Review.findById(req.params.id);
+    if (!review) {
+      return res.status(404).json({ success: false, message: 'Review not found' });
+    }
+
+    switch (action) {
+      case 'approve':
+        review.isApproved = true;
+        review.moderation = { status: 'approved', reviewedBy: req.user._id, reason: reason || '' };
+        break;
+      case 'reject':
+        review.isApproved = false;
+        review.moderation = { status: 'rejected', reviewedBy: req.user._id, reason: reason || '' };
+        break;
+      case 'remove':
+        await review.remove();
+        return res.json({ success: true, message: 'Review removed' });
+      default:
+        return res.status(400).json({ success: false, message: 'Invalid action' });
+    }
+
+    await review.save();
+    res.json({ success: true, message: 'Review moderated', data: review });
+  } catch (error) {
+    logger.error('Moderate review error:', error);
+    res.status(500).json({ success: false, message: 'Server error moderating review' });
+  }
+});
+
 // @route   GET /api/admin/reviews
 // @desc    Get all reviews for moderation
 // @access  Private (Admin)
