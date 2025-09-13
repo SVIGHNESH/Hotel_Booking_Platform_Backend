@@ -119,10 +119,12 @@ router.post('/register', userRegistrationValidation, async (req, res) => {
 router.post('/login', userLoginValidation, async (req, res) => {
   try {
     const { email, password } = req.body;
+    logger.info('Login attempt', { email });
 
     // Check if user exists
     const user = await User.findOne({ email });
     if (!user) {
+      logger.warn('Login failed - user not found', { email });
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
@@ -131,6 +133,7 @@ router.post('/login', userLoginValidation, async (req, res) => {
 
     // Check if account is active
     if (!user.isActive) {
+      logger.warn('Login failed - inactive account', { userId: user._id });
       return res.status(401).json({
         success: false,
         message: 'Account has been deactivated. Please contact support.'
@@ -140,6 +143,7 @@ router.post('/login', userLoginValidation, async (req, res) => {
     // Verify password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
+      logger.warn('Login failed - bad password', { userId: user._id });
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
@@ -156,6 +160,7 @@ router.post('/login', userLoginValidation, async (req, res) => {
       role: user.role
     });
 
+    logger.info('Login success', { userId: user._id, role: user.role });
     res.json({
       success: true,
       message: 'Login successful',

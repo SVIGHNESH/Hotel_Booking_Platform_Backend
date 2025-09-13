@@ -18,8 +18,32 @@ const app = express()
 app.set('trust proxy', 1);
 // Security middleware
 app.use(helmet());
+// Environment flag
+const isDev = (process.env.NODE_ENV || 'development') !== 'production';
+
+// CORS: allow configured frontend plus common localhost variants
+const allowedOrigins = new Set([
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'http://localhost:3000',
+  'http://127.0.0.1:3000',
+  'http://localhost:5000',
+  'http://127.0.0.1:5000'
+]);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true); // non-browser or same-origin
+    if (isDev && /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(origin)) {
+      if (!allowedOrigins.has(origin)) {
+        logger.info('CORS auto-allow (dev localhost)', { origin });
+        allowedOrigins.add(origin);
+      }
+      return callback(null, true);
+    }
+    if (allowedOrigins.has(origin)) return callback(null, true);
+    logger.warn('CORS blocked origin', { origin });
+    return callback(null, false);
+  },
   credentials: true
 }));
 
