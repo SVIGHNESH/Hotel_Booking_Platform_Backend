@@ -235,8 +235,10 @@ const bookingSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Generate booking reference before saving
-bookingSchema.pre('save', function(next) {
+// Generate booking reference and compute total nights before validation
+// so required fields derived from provided dates are present during
+// Mongoose validation.
+bookingSchema.pre('validate', function(next) {
   if (!this.bookingReference) {
     const timestamp = Date.now().toString(36);
     const random = Math.random().toString(36).substr(2, 5);

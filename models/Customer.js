@@ -56,23 +56,13 @@ const customerSchema = new mongoose.Schema({
     }
   },
   preferences: {
+    // Allow a flexible location shape to support either numeric lat/long
+    // or GeoJSON Point objects (some existing deployments created a
+    // 2dsphere index on this field). Using Mixed prevents Mongoose from
+    // stripping GeoJSON objects and avoids insert-time index errors.
     location: {
-      latitude: {
-        type: Number,
-        min: -90,
-        max: 90
-      },
-      longitude: {
-        type: Number,
-        min: -180,
-        max: 180
-      },
-      radius: {
-        type: Number,
-        default: 10, // km
-        min: 1,
-        max: 100
-      }
+      type: mongoose.Schema.Types.Mixed,
+      default: { radius: 10 }
     },
     notifications: {
       email: {
