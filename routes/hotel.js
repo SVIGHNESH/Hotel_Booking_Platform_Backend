@@ -184,8 +184,17 @@ router.get('/bookings', async (req, res) => {
 
     // Transform bookings into frontend-friendly structure
     const transformed = bookings.map(b => {
-      const totalGuests = (b.bookingDetails?.guests?.adults || 0) + (b.bookingDetails?.guests?.children || 0) + (b.bookingDetails?.guests?.infants || 0);
-      return {
+      // derived guest breakdown (preserve structure expected by older frontend code)
+      const guestsObj = {
+        adults: b.bookingDetails?.guests?.adults || 0,
+        children: b.bookingDetails?.guests?.children || 0,
+        infants: b.bookingDetails?.guests?.infants || 0
+      };
+
+      const totalGuests = guestsObj.adults + guestsObj.children + guestsObj.infants;
+
+      const transformedBooking = {
+        // new / canonical fields
         id: b._id.toString(),
         bookingNumber: b.bookingReference,
         bookingDate: b.createdAt,
@@ -196,14 +205,14 @@ router.get('/bookings', async (req, res) => {
         nights: b.bookingDetails?.totalNights,
         status: mapStatusForFrontend(b.status),
         totalAmount: b.pricing?.totalAmount,
-        amountPaid: b.pricing?.totalAmount, // assuming paid fully
+        amountPaid: b.pricing?.totalAmount, // assuming paid fully when stored so far
         paymentStatus: b.pricing?.paymentStatus || 'pending',
         source: 'website',
-        guests: totalGuests,
+        guestsCount: totalGuests,
         customer: {
           name: `${b.customerId?.firstName || ''} ${b.customerId?.lastName || ''}`.trim(),
-            email: b.customerId?.userId?.email || 'n/a',
-            phone: b.customerId?.phone
+          email: b.customerId?.userId?.email || 'n/a',
+          phone: b.customerId?.phone
         },
         room: {
           number: b.roomId?.name || 'N/A',
@@ -211,8 +220,26 @@ router.get('/bookings', async (req, res) => {
         },
         roomId: b.roomId?._id?.toString(),
         createdAt: b.createdAt,
-        updatedAt: b.updatedAt
+        updatedAt: b.updatedAt,
+        // preserve full booking object for clients that expect it
+        raw: b
       };
+
+      // Backward-compatible (legacy) fields that older frontend pages expect
+      transformedBooking._id = b._id; // original ObjectId (helpful for some UI code)
+      transformedBooking.bookingId = b.bookingReference;
+      transformedBooking.customerName = transformedBooking.customer.name || '';
+      transformedBooking.customerEmail = transformedBooking.customer.email || '';
+      transformedBooking.customerPhone = transformedBooking.customer.phone || '';
+      transformedBooking.roomNumber = transformedBooking.room.number;
+      transformedBooking.roomType = transformedBooking.room.type;
+      transformedBooking.guests = guestsObj;
+      transformedBooking.bookingSource = transformedBooking.source;
+      transformedBooking.specialRequests = b.specialRequests || '';
+      transformedBooking.totalAmount = transformedBooking.totalAmount || 0;
+      transformedBooking.amountPaid = transformedBooking.amountPaid || 0;
+
+      return transformedBooking;
     });
 
     res.json({
