@@ -862,42 +862,24 @@ router.get('/reviews', async (req, res) => {
 // @route   POST /api/hotel/profile/images
 // @desc    Upload hotel images
 // @access  Private (Hotel)
-router.post('/profile/images', requireHotelVerification, hotelImageUpload.array('images', 10), async (req, res) => {
+router.post('/profile/images', hotelImageUpload.array('images', 5), async (req, res) => {
   try {
-    const hotel = await Hotel.findOne({ userId: req.user._id });
-    if (!hotel) {
-      return res.status(404).json({
-        success: false,
-        message: 'Hotel profile not found'
-      });
-    }
-
     if (!req.files || req.files.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'No images uploaded'
-      });
+      return res.status(400).json({ success: false, message: 'No images uploaded' });
     }
-
     const imagePaths = req.files.map(file => file.path);
-    hotel.images = [...(hotel.images || []), ...imagePaths];
-    await hotel.save();
-
-    res.json({
-      success: true,
-      message: 'Hotel images uploaded successfully',
-      data: {
-        images: imagePaths,
-        totalImages: hotel.images.length
-      }
-    });
-
+    const hotel = await Hotel.findOneAndUpdate(
+      { userId: req.user._id },
+      { $push: { images: { $each: imagePaths } } },
+      { new: true }
+    );
+    if (!hotel) {
+      return res.status(404).json({ success: false, message: 'Hotel profile not found' });
+    }
+    res.json({ success: true, message: 'Images uploaded successfully', data: { images: hotel.images } });
   } catch (error) {
-    logger.error('Upload hotel images error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error uploading hotel images'
-    });
+    logger.error('Hotel image upload error:', error);
+    res.status(500).json({ success: false, message: 'Server error uploading images' });
   }
 });
 

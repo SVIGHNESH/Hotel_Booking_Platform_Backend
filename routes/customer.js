@@ -672,131 +672,57 @@ router.get('/rooms/availability', async (req, res) => {
 // @access  Private (Customer)
 router.post('/bookings', bookingValidation, async (req, res) => {
   try {
-    // Get customer profile
-    const customer = await Customer.findOne({ userId: req.user._id });
-    if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer profile not found'
-      });
+    const userId = req.user._id;
+    const {
+      roomId,
+      hotelId,
+      bookingDetails,
+      guestDetails,
+      paymentMethod,
+      totalAmount
+    } = req.body;
+
+    // Validate hotel and room
+    const hotel = await Hotel.findById(hotelId);
+    if (!hotel || !hotel.isVerified || !hotel.isActive) {
+      return res.status(404).json({ success: false, message: 'Hotel not found or unavailable' });
     }
-
-    // Verify room exists and is available
-    const room = await Room.findById(req.body.roomId);
-    if (!room || !room.isActive) {
-      return res.status(404).json({
-        success: false,
-        message: 'Room not found or not available'
-      });
+    const room = await Room.findById(roomId);
+    if (!room || !room.isAvailable) {
+      return res.status(404).json({ success: false, message: 'Room not found or unavailable' });
     }
-
-    // Check room availability
-    const { checkIn, checkOut, numberOfRooms } = req.body.bookingDetails;
-    const bookedRooms = await Booking.aggregate([
-      {
-        $match: {
-          roomId: room._id,
-          status: { $in: ['confirmed', 'pending'] },
-          $or: [
-            {
-              'bookingDetails.checkIn': {
-                $lt: new Date(checkOut),
-                $gte: new Date(checkIn)
-              }
-            },
-            {
-              'bookingDetails.checkOut': {
-                $gt: new Date(checkIn),
-                $lte: new Date(checkOut)
-              }
-            }
-          ]
-        }
-      },
-      {
-        $group: {
-          _id: null,
-          totalBooked: { $sum: '$bookingDetails.numberOfRooms' }
-        }
-      }
-    ]);
-
-    const bookedCount = bookedRooms[0]?.totalBooked || 0;
-    const availableCount = room.totalRooms - bookedCount;
-
-    if (availableCount < numberOfRooms) {
-      return res.status(400).json({
-        success: false,
-        message: `Only ${availableCount} rooms available for selected dates`
-      });
-    }
-
-    // Calculate pricing
-    const nights = Math.ceil((new Date(checkOut) - new Date(checkIn)) / (1000 * 60 * 60 * 24));
-    const roomPrice = room.pricing.basePrice * nights * numberOfRooms;
-    const taxes = roomPrice * (room.pricing.taxes / 100);
-    const serviceFee = room.pricing.serviceFee || 0;
-    const totalAmount = roomPrice + taxes + serviceFee;
 
     // Create booking
     const booking = new Booking({
-      customerId: customer._id,
-      hotelId: room.hotelId,
-      roomId: room._id,
-      bookingDetails: req.body.bookingDetails,
-      guestDetails: req.body.guestDetails,
-      contactDetails: req.body.contactDetails,
+      customerId: userId,
+      hotelId,
+      roomId,
+      bookingDetails,
+      guestDetails,
       pricing: {
-        roomPrice,
-        taxes,
-        serviceFee,
+        roomPrice: room.price,
+        taxes: totalAmount * 0.1,
+        serviceFee: 25,
         totalAmount,
-        currency: room.pricing.currency
+        currency: 'INR',
+        paymentStatus: paymentMethod === 'card' ? 'paid' : 'pending'
       },
-      specialRequests: req.body.specialRequests
+      status: 'confirmed',
+      createdAt: new Date()
     });
-
     await booking.save();
 
-    // Populate booking with hotel and room details
-    await booking.populate([
-      { path: 'hotelId', select: 'name address contactInfo' },
-      { path: 'roomId', select: 'roomType name' }
-    ]);
+    // Optionally, update room availability
+    // room.isAvailable = false;
+    // await room.save();
 
-    // Send confirmation email
-    try {
-      const bookingDetails = {
-        bookingReference: booking.bookingReference,
-        hotelName: booking.hotelId.name,
-        checkIn: booking.bookingDetails.checkIn,
-        checkOut: booking.bookingDetails.checkOut,
-        guests: booking.bookingDetails.guests,
-        numberOfRooms: booking.bookingDetails.numberOfRooms,
-        totalAmount: booking.pricing.totalAmount
-      };
+    // Optionally, send confirmation email
+    // await sendBookingConfirmationEmail(guestDetails.email, booking);
 
-      await sendBookingConfirmationEmail(
-        req.body.contactDetails.email,
-        `${customer.firstName} ${customer.lastName}`,
-        bookingDetails
-      );
-    } catch (emailError) {
-      logger.error('Failed to send booking confirmation email:', emailError);
-    }
-
-    res.status(201).json({
-      success: true,
-      message: 'Booking created successfully',
-      data: booking
-    });
-
+    res.status(201).json({ success: true, message: 'Booking created successfully', data: booking });
   } catch (error) {
     logger.error('Create booking error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error creating booking'
-    });
+    res.status(500).json({ success: false, message: 'Server error creating booking' });
   }
 });
 
