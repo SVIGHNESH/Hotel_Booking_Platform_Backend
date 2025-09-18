@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const mongoose = require('mongoose');
+const path = require('path');
 
 const Customer = require('../models/Customer');
 const Hotel = require('../models/Hotel');
@@ -21,6 +22,20 @@ const {
 const { profileImageUpload, reviewImageUpload } = require('../utils/upload');
 const { sendBookingConfirmationEmail } = require('../utils/email');
 const logger = require('../utils/logger');
+
+// Normalize stored image value (object.url, plain string, local fs path) to browser-usable URL
+const normalizeImageUrl = (raw) => {
+  if (!raw) return raw;
+  if (typeof raw !== 'string') return raw; // leave non-string untouched
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('/uploads/')) return raw;
+  const idx = raw.lastIndexOf('/uploads/');
+  if (idx !== -1) return raw.slice(idx);
+  if (raw.includes(path.sep + 'uploads' + path.sep)) {
+    const parts = raw.split(/uploads[\\/]/);
+    if (parts[1]) return '/uploads/' + parts[1].replace(/\\/g, '/');
+  }
+  return raw; // fallback (maybe already relative)
+};
 
 // Apply auth and customer role to all routes
 router.use(auth);
@@ -98,8 +113,11 @@ router.get('/favorites', async (req, res) => {
       select: 'name address images rating priceRange'
     });
     if (!customer) return res.status(404).json({ success: false, message: 'Customer profile not found' });
-
-    res.json({ success: true, data: customer.favorites || [] });
+    const favorites = (customer.favorites || []).map(h => ({
+      ...h.toObject(),
+      images: (h.images || []).map(img => normalizeImageUrl(img.url || img))
+    }));
+    res.json({ success: true, data: favorites });
   } catch (error) {
     logger.error('Get favorites error:', error);
     res.status(500).json({ success: false, message: 'Server error retrieving favorites' });
@@ -320,17 +338,18 @@ router.get('/hotels', async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit));
 
-    // Get rooms for each hotel (respect available inventory)
     const hotelsWithRooms = await Promise.all(hotels.map(async (hotel) => {
       const rooms = await Room.find({ hotelId: hotel._id });
       return {
         ...hotel.toObject(),
-        rooms: rooms || []
+        images: (hotel.images || []).map(img => normalizeImageUrl(img.url || img)),
+        rooms: rooms.map(r => ({
+          ...r.toObject(),
+          images: (r.images || []).map(ri => normalizeImageUrl(ri.url || ri))
+        }))
       };
     }));
-
     const total = await Hotel.countDocuments(filter);
-
     res.json({
       success: true,
       data: hotelsWithRooms,
@@ -341,13 +360,9 @@ router.get('/hotels', async (req, res) => {
         pages: Math.ceil(total / limit)
       }
     });
-
   } catch (error) {
     logger.error('Get hotels error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error retrieving hotels'
-    });
+    res.status(500).json({ success: false, message: 'Server error retrieving hotels' });
   }
 });
 
@@ -507,6 +522,14 @@ router.get('/hotels/search', searchValidation, async (req, res) => {
       );
     }
 
+    hotelsWithAvailability = hotelsWithAvailability.map(h => ({
+      ...h,
+      images: (h.images || []).map(img => normalizeImageUrl((img && img.url) || img)),
+      availableRooms: (h.availableRooms || []).map(r => ({
+        ...r,
+        images: (r.images || []).map(ri => normalizeImageUrl((ri && ri.url) || ri))
+      }))
+    }));
     res.json({
       success: true,
       data: {
@@ -529,7 +552,6 @@ router.get('/hotels/search', searchValidation, async (req, res) => {
         }
       }
     });
-
   } catch (error) {
     logger.error('Hotel search error:', error);
     res.status(500).json({
@@ -571,11 +593,14 @@ router.get('/hotels/:id', validateObjectId, async (req, res) => {
       .populate('customerId', 'firstName lastName')
       .select('-customerId.userId');
 
+    const normalizedHotel = { ...hotel.toObject(), images: (hotel.images || []).map(img => normalizeImageUrl(img.url || img)) };
+    const normalizedRooms = rooms.map(r => ({ ...r.toObject(), images: (r.images || []).map(ri => normalizeImageUrl(ri.url || ri)) }));
+
     res.json({
       success: true,
       data: {
-        hotel,
-        rooms,
+        hotel: normalizedHotel,
+        rooms: normalizedRooms,
         reviews
       }
     });
@@ -673,14 +698,31 @@ router.get('/rooms/availability', async (req, res) => {
 router.post('/bookings', bookingValidation, async (req, res) => {
   try {
     const userId = req.user._id;
+    let customer = await Customer.findOne({ userId });
+    if (!customer) {
+      // Auto-create minimal customer profile from user/contactDetails fallback
+      customer = new Customer({
+        userId,
+        firstName: req.body.guestDetails?.firstName || 'Guest',
+        lastName: req.body.guestDetails?.lastName || 'User',
+        phone: req.body.contactDetails?.phone || '0000000000',
+        preferences: { location: { type: 'Point', coordinates: [0,0], radius: 10 }, notifications: { email: true, sms: false } }
+      });
+      await customer.save();
+    }
     const {
       roomId,
       hotelId,
       bookingDetails,
       guestDetails,
+      contactDetails,
       paymentMethod,
-      totalAmount
+      totalAmount: clientTotal
     } = req.body;
+
+    if (!hotelId) {
+      return res.status(400).json({ success: false, message: 'Hotel ID is required' });
+    }
 
     // Validate hotel and room
     const hotel = await Hotel.findById(hotelId);
@@ -692,37 +734,75 @@ router.post('/bookings', bookingValidation, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Room not found or unavailable' });
     }
 
+    // Compute nights and pricing from room.pricing
+    const checkIn = new Date(bookingDetails.checkIn);
+    const checkOut = new Date(bookingDetails.checkOut);
+    const nights = Math.max(1, Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24)));
+    const roomsCount = Number(bookingDetails.numberOfRooms) || 1;
+    const basePerNight = Number(room.pricing?.basePrice) || 0;
+    const taxPercent = Number(room.pricing?.taxes) || 0; // percent
+    const serviceFee = Number(room.pricing?.serviceFee) || 0; // flat
+
+    const roomPrice = basePerNight * nights * roomsCount;
+    const taxes = roomPrice * (taxPercent / 100);
+    const computedTotal = roomPrice + taxes + serviceFee;
+    const totalAmount = Number(clientTotal) > 0 ? Number(clientTotal) : computedTotal;
+
+    // Normalize guestDetails into array if provided as single object
+    let guestDetailsArray = undefined;
+    if (Array.isArray(guestDetails)) {
+      guestDetailsArray = guestDetails
+        .filter(g => g && g.firstName && g.lastName)
+        .map(g => ({ firstName: g.firstName, lastName: g.lastName, age: g.age, gender: g.gender }));
+    } else if (guestDetails && typeof guestDetails === 'object') {
+      const { firstName, lastName, age, gender } = guestDetails;
+      if (firstName && lastName) {
+        guestDetailsArray = [{ firstName, lastName, age, gender }];
+      }
+    }
+
+    const specialRequests = bookingDetails?.specialRequests || req.body.specialRequests || '';
+
     // Create booking
     const booking = new Booking({
-      customerId: userId,
+      customerId: customer._id,
       hotelId,
       roomId,
-      bookingDetails,
-      guestDetails,
+      bookingDetails: {
+        checkIn: bookingDetails.checkIn,
+        checkOut: bookingDetails.checkOut,
+        guests: bookingDetails.guests,
+        numberOfRooms: bookingDetails.numberOfRooms,
+        totalNights: nights
+      },
+      guestDetails: guestDetailsArray,
+      contactDetails: {
+        email: contactDetails?.email,
+        phone: contactDetails?.phone
+      },
       pricing: {
-        roomPrice: room.price,
-        taxes: totalAmount * 0.1,
-        serviceFee: 25,
+        roomPrice,
+        taxes,
+        serviceFee,
         totalAmount,
-        currency: 'INR',
+        currency: room.pricing?.currency || 'INR',
         paymentStatus: paymentMethod === 'card' ? 'paid' : 'pending'
       },
+      specialRequests,
       status: 'confirmed',
       createdAt: new Date()
     });
+
+    await booking.validate();
     await booking.save();
-
-    // Optionally, update room availability
-    // room.isAvailable = false;
-    // await room.save();
-
-    // Optionally, send confirmation email
-    // await sendBookingConfirmationEmail(guestDetails.email, booking);
 
     res.status(201).json({ success: true, message: 'Booking created successfully', data: booking });
   } catch (error) {
     logger.error('Create booking error:', error);
-    res.status(500).json({ success: false, message: 'Server error creating booking' });
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ success: false, message: 'Validation failed', errors: Object.values(error.errors).map(e => e.message) });
+    }
+    res.status(500).json({ success: false, message: error.message || 'Server error creating booking' });
   }
 });
 
@@ -895,52 +975,74 @@ router.put('/bookings/:id/status', validateObjectId, async (req, res) => {
 router.get('/bookings', async (req, res) => {
   try {
     const { page = 1, limit = 10, status } = req.query;
-
-    // Get customer profile
     const customer = await Customer.findOne({ userId: req.user._id });
     if (!customer) {
-      return res.status(404).json({
-        success: false,
-        message: 'Customer profile not found'
-      });
+      return res.status(404).json({ success: false, message: 'Customer profile not found' });
     }
 
     let query = { customerId: customer._id };
-    if (status) {
-      query.status = status;
-    }
+    if (status) query.status = status;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const bookings = await Booking.find(query)
+    const rawBookings = await Booking.find(query)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
-      .populate('hotelId', 'name address images contactInfo')
+      .populate('hotelId', 'name address images rating')
       .populate('roomId', 'roomType name images');
 
     const total = await Booking.countDocuments(query);
 
-    res.json({
-      success: true,
-      data: {
-        bookings,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / parseInt(limit)),
-          totalBookings: total,
-          hasNext: parseInt(page) < Math.ceil(total / parseInt(limit)),
-          hasPrev: parseInt(page) > 1
-        }
-      }
+    const bookings = rawBookings.map(b => {
+      const guestsObj = b.bookingDetails?.guests || {};
+      const guestCount = (guestsObj.adults || 0) + (guestsObj.children || 0) + (guestsObj.infants || 0);
+      const hotel = b.hotelId || {};
+      const room = b.roomId || {};
+      const address = hotel.address || {};
+      const canCancel = ['pending','confirmed'].includes(b.status) && new Date(b.bookingDetails.checkIn) > new Date();
+      const canReview = ['completed','checked_out'].includes(b.status); // simplistic placeholder
+      const hotelImages = (hotel.images || []).map(img => normalizeImageUrl(img.url || img));
+      const roomImages = (room.images || []).map(img => normalizeImageUrl(img.url || img));
+      return {
+        id: b._id.toString(),
+        bookingDate: b.createdAt,
+        status: b.status,
+        checkIn: b.bookingDetails?.checkIn,
+        checkOut: b.bookingDetails?.checkOut,
+        rooms: b.bookingDetails?.numberOfRooms || 1,
+        guests: guestCount,
+        hotel: {
+          name: hotel.name,
+          image: hotelImages[0] || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=800&q=60',
+          images: hotelImages,
+          location: [address.city, address.state].filter(Boolean).join(', '),
+          rating: hotel.rating?.average || 0
+        },
+        room: {
+          name: room.name || room.roomType || 'Room',
+          type: room.roomType,
+          image: roomImages[0],
+          images: roomImages
+        },
+        totalCost: b.pricing?.totalAmount || 0,
+        specialRequests: b.specialRequests || '',
+        cancellationReason: b.cancellation?.reason,
+        canCancel,
+        canReview,
+        hasReview: false,
+        raw: b
+      };
     });
 
+    res.json({
+      success: true,
+      data: { bookings, pagination: { currentPage: parseInt(page), totalPages: Math.ceil(total / parseInt(limit)), totalBookings: total, hasNext: parseInt(page) < Math.ceil(total / parseInt(limit)), hasPrev: parseInt(page) > 1 } },
+      bookings
+    });
   } catch (error) {
     logger.error('Get customer bookings error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching bookings'
-    });
+    res.status(500).json({ success: false, message: 'Server error fetching bookings' });
   }
 });
 
@@ -961,27 +1063,21 @@ router.get('/bookings/:id', validateObjectId, async (req, res) => {
       _id: req.params.id,
       customerId: customer._id
     })
-      .populate('hotelId', 'name address images contactInfo amenities')
-      .populate('roomId', 'roomType name description images amenities');
+      .populate('hotelId', 'name address images contactInfo amenities rating')
+      .populate('roomId', 'roomType name description images amenities pricing');
 
-    if (!booking) {
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: booking
-    });
-
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+    const hotel = booking.hotelId || {};
+    const room = booking.roomId || {};
+    const normalized = {
+      ...booking.toObject(),
+      hotelId: hotel ? { ...(hotel.toObject ? hotel.toObject() : hotel), images: (hotel.images || []).map(img => normalizeImageUrl(img.url || img)) } : hotel,
+      roomId: room ? { ...(room.toObject ? room.toObject() : room), images: (room.images || []).map(img => normalizeImageUrl(img.url || img)) } : room
+    };
+    res.json({ success: true, data: normalized });
   } catch (error) {
     logger.error('Get booking details error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching booking details'
-    });
+    res.status(500).json({ success: false, message: 'Server error fetching booking details' });
   }
 });
 

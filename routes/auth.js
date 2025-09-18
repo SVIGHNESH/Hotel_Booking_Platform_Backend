@@ -40,25 +40,25 @@ router.post('/register', userRegistrationValidation, async (req, res) => {
 
     // Create role-specific profile
     if (role === 'customer') {
-      // Provide a safe default GeoJSON point for preferences.location so
-      // existing 2dsphere indexes won't fail on insert when coordinates
-      // are missing. If the deployment doesn't have such an index this
-      // is harmless.
-      const customer = new Customer({
-        userId: user._id,
-        firstName,
-        lastName,
-        phone,
-        preferences: {
-          location: {
-            type: 'Point',
-            coordinates: [0, 0],
-            radius: 10
-          },
-          notifications: { email: true, sms: false }
-        }
-      });
-      await customer.save();
+      // Always create a customer profile if not exists
+      let customer = await Customer.findOne({ userId: user._id });
+      if (!customer) {
+        customer = new Customer({
+          userId: user._id,
+          firstName: firstName || '',
+          lastName: lastName || '',
+          phone: phone || '',
+          preferences: {
+            location: {
+              type: 'Point',
+              coordinates: [0, 0],
+              radius: 10
+            },
+            notifications: { email: true, sms: false }
+          }
+        });
+        await customer.save();
+      }
     } else if (role === 'hotel') {
       const hotel = new Hotel({
         userId: user._id,

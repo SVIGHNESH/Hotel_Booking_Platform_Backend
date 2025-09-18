@@ -12,8 +12,25 @@ const {
   roomValidation,
   validateObjectId 
 } = require('../middleware/validation');
-const { hotelImageUpload, roomImageUpload } = require('../utils/upload');
+const { hotelImageUpload, roomImageUpload, cloudinary, cloudConfigured } = require('../utils/upload');
 const logger = require('../utils/logger');
+const isDevEnv = (process.env.NODE_ENV || 'development') !== 'production';
+
+// Add allowed hotel types for validation/sanitization
+const ALLOWED_HOTEL_TYPES = ['hotel','resort','motel','hostel','apartment','villa','guesthouse'];
+
+// Helper to normalize image URLs (convert local filesystem paths to /uploads/...)
+const normalizeImageUrl = (raw) => {
+  if (!raw) return raw;
+  if (raw.startsWith('http://') || raw.startsWith('https://') || raw.startsWith('/uploads/')) return raw;
+  const idx = raw.lastIndexOf('/uploads/');
+  if (idx !== -1) return raw.slice(idx);
+  // If path contains '/backend/uploads/' pattern
+  const marker = '/uploads/';
+  const parts = raw.split(marker);
+  if (parts.length > 1) return '/uploads/' + parts[1];
+  return raw; // fallback
+};
 
 // Apply auth and hotel role to all routes
 router.use(auth);
@@ -25,25 +42,16 @@ router.use(authorize('hotel'));
 router.get('/profile', async (req, res) => {
   try {
     const hotel = await Hotel.findOne({ userId: req.user._id });
-    
     if (!hotel) {
-      return res.status(404).json({
-        success: false,
-        message: 'Hotel profile not found'
-      });
+      return res.status(404).json({ success: false, message: 'Hotel profile not found' });
     }
-
-    res.json({
-      success: true,
-      data: hotel
-    });
-
+    const hotelObj = hotel.toObject();
+    if (!hotelObj.type || !ALLOWED_HOTEL_TYPES.includes(hotelObj.type)) hotelObj.type = 'hotel';
+    hotelObj.images = (hotelObj.images || []).map(img => normalizeImageUrl(img.url || img));
+    res.json({ success: true, data: hotelObj });
   } catch (error) {
     logger.error('Get hotel profile error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error fetching hotel profile'
-    });
+    res.status(500).json({ success: false, message: 'Server error fetching hotel profile' });
   }
 });
 
@@ -52,8 +60,14 @@ router.get('/profile', async (req, res) => {
 // @access  Private (Hotel)
 router.put('/profile', requireHotelVerification, hotelProfileValidation, async (req, res) => {
   try {
-    // Normalize incoming payload from frontend shape to backend schema
     const payload = { ...req.body };
+
+    // Sanitize type if provided
+    if (payload.type) {
+      if (!ALLOWED_HOTEL_TYPES.includes(payload.type)) {
+        delete payload.type; // discard invalid incoming value
+      }
+    }
 
     // Frontend user may send policies.checkIn / policies.checkOut or custom fields
     if (payload.policies) {
@@ -118,6 +132,11 @@ router.put('/profile', requireHotelVerification, hotelProfileValidation, async (
 
     if (!hotel) {
       return res.status(404).json({ success: false, message: 'Hotel profile not found' });
+    }
+
+    // Guarantee type for response
+    if (!hotel.type || !ALLOWED_HOTEL_TYPES.includes(hotel.type)) {
+      hotel.type = 'hotel';
     }
 
     res.json({ success: true, message: 'Hotel profile updated successfully', data: hotel });
@@ -398,6 +417,55 @@ router.put('/bookings/:id/status', requireHotelVerification, validateObjectId, a
       success: false,
       message: 'Server error updating booking status'
     });
+  }
+});
+
+// @route   PUT /api/hotel/bookings/:id
+// @desc    Edit a booking (hotel dashboard)
+// @access  Private (Hotel)
+router.put('/bookings/:id', requireHotelVerification, validateObjectId, async (req, res) => {
+  try {
+    const bookingId = req.params.id;
+    const { checkIn, checkOut } = req.body;
+
+    const booking = await Booking.findOne({ _id: bookingId, hotelId: req.hotel._id });
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found' });
+
+    // Allow edits only for certain statuses
+    if (!['pending', 'confirmed'].includes(booking.status)) {
+      return res.status(400).json({ success: false, message: 'Only pending or confirmed bookings can be edited' });
+    }
+
+    let mutated = false;
+    if (checkIn) {
+      const newCheckIn = new Date(checkIn);
+      if (isNaN(newCheckIn)) return res.status(400).json({ success: false, message: 'Invalid check-in date' });
+      booking.bookingDetails.checkIn = newCheckIn;
+      mutated = true;
+    }
+    if (checkOut) {
+      const newCheckOut = new Date(checkOut);
+      if (isNaN(newCheckOut)) return res.status(400).json({ success: false, message: 'Invalid check-out date' });
+      booking.bookingDetails.checkOut = newCheckOut;
+      mutated = true;
+    }
+
+    if (mutated) {
+      // Let pre-validate recompute total nights
+      await booking.validate();
+      await booking.save();
+    }
+
+    res.json({ success: true, message: 'Booking updated successfully', data: {
+      id: booking._id.toString(),
+      checkIn: booking.bookingDetails.checkIn,
+      checkOut: booking.bookingDetails.checkOut,
+      nights: booking.bookingDetails.totalNights,
+      status: mapStatusForFrontend(booking.status)
+    }});
+  } catch (error) {
+    logger.error('Hotel edit booking error:', error);
+    res.status(500).json({ success: false, message: 'Server error updating booking' });
   }
 });
 
@@ -862,25 +930,45 @@ router.get('/reviews', async (req, res) => {
 // @route   POST /api/hotel/profile/images
 // @desc    Upload hotel images
 // @access  Private (Hotel)
-router.post('/profile/images', hotelImageUpload.array('images', 5), async (req, res) => {
-  try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ success: false, message: 'No images uploaded' });
-    }
-    const imagePaths = req.files.map(file => file.path);
-    const hotel = await Hotel.findOneAndUpdate(
-      { userId: req.user._id },
-      { $push: { images: { $each: imagePaths } } },
-      { new: true }
-    );
-    if (!hotel) {
-      return res.status(404).json({ success: false, message: 'Hotel profile not found' });
-    }
-    res.json({ success: true, message: 'Images uploaded successfully', data: { images: hotel.images } });
-  } catch (error) {
-    logger.error('Hotel image upload error:', error);
-    res.status(500).json({ success: false, message: 'Server error uploading images' });
+router.post('/profile/images', (req, res, next) => {
+  const cloudCfg = cloudinary?.config?.();
+  if (!cloudConfigured && (!cloudCfg || !cloudCfg.cloud_name)) {
+    logger.warn('Hotel image upload using local fallback storage');
   }
+  hotelImageUpload.array('images', 5)(req, res, async (err) => {
+    if (err) {
+      const errInfo = { name: err.name, code: err.code, message: err.message };
+      logger.error('Hotel image upload Multer/Cloudinary error', errInfo);
+      let status = err.code === 'LIMIT_FILE_SIZE' ? 400 : 400;
+      return res.status(status).json({ success: false, message: err.message || 'Image upload failed', details: isDevEnv ? errInfo : undefined });
+    }
+    try {
+      if (!req.files || req.files.length === 0) return res.status(400).json({ success: false, message: 'No images uploaded' });
+      const newImages = req.files.map(f => {
+        if (cloudConfigured) {
+          return { url: f.path, publicId: f.filename };
+        }
+        // Local fallback: build relative URL
+        const baseName = f.filename || f.path.split('/').pop();
+        let relPath = f.path;
+        const idx = relPath.lastIndexOf('/uploads/');
+        if (idx !== -1) relPath = relPath.slice(idx); else relPath = `/uploads/hotels/${baseName}`;
+        return { url: relPath, publicId: baseName };
+      });
+      const hotel = await Hotel.findOneAndUpdate(
+        { userId: req.user._id },
+        { $push: { images: { $each: newImages } } },
+        { new: true }
+      );
+      if (!hotel) return res.status(404).json({ success: false, message: 'Hotel profile not found' });
+      const imageUrls = (hotel.images || []).map(img => normalizeImageUrl(img.url || img));
+      res.json({ success: true, message: 'Images uploaded successfully', data: { images: imageUrls, urls: imageUrls } });
+    } catch (error) {
+      const catchInfo = { message: error.message, name: error.name };
+      logger.error('Hotel image upload route error', catchInfo);
+      return res.status(500).json({ success: false, message: 'Server error uploading images', details: isDevEnv ? catchInfo : undefined });
+    }
+  });
 });
 
 module.exports = router;

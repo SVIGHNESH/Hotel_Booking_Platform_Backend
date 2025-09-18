@@ -18,6 +18,11 @@ const hotelSchema = new mongoose.Schema({
     required: [true, 'Hotel description is required'],
     maxlength: [1000, 'Description cannot exceed 1000 characters']
   },
+  type: {
+    type: String,
+    enum: ['hotel', 'resort', 'motel', 'hostel', 'apartment', 'villa', 'guesthouse'],
+    default: 'hotel'
+  },
   address: {
     street: {
       type: String,

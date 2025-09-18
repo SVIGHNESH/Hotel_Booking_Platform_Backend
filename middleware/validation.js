@@ -172,8 +172,10 @@ const bookingValidation = [
     .isISO8601()
     .withMessage('Check-in date must be a valid date')
     .custom((value) => {
-      if (new Date(value) <= new Date()) {
-        throw new Error('Check-in date must be in the future');
+      const today = new Date(); today.setHours(0,0,0,0);
+      const checkIn = new Date(value); checkIn.setHours(0,0,0,0);
+      if (checkIn < today) {
+        throw new Error('Check-in date cannot be in the past');
       }
       return true;
     }),
@@ -181,7 +183,11 @@ const bookingValidation = [
     .isISO8601()
     .withMessage('Check-out date must be a valid date')
     .custom((value, { req }) => {
-      if (new Date(value) <= new Date(req.body.bookingDetails.checkIn)) {
+      const checkInRaw = req.body.bookingDetails?.checkIn;
+      if (!checkInRaw) return false;
+      const checkIn = new Date(checkInRaw); checkIn.setHours(0,0,0,0);
+      const checkOut = new Date(value); checkOut.setHours(0,0,0,0);
+      if (checkOut <= checkIn) {
         throw new Error('Check-out date must be after check-in date');
       }
       return true;
@@ -201,8 +207,8 @@ const bookingValidation = [
     .normalizeEmail()
     .withMessage('Please provide a valid email'),
   body('contactDetails.phone')
-    .isMobilePhone()
-    .withMessage('Please provide a valid phone number'),
+    .matches(/^[+]?\d[\d\s\-]{6,15}$/)
+    .withMessage('Please provide a valid phone number (digits, spaces, hyphens allowed)'),
   handleValidationErrors
 ];
 
