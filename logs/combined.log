@@ -2430,3 +2430,18 @@
 {"level":"info","message":"GET /api/customer/hotels/68cc3a8b2ac10d9c703e178f - 127.0.0.1","service":"hotel-booking-api","timestamp":"2025-09-19 10:31:19"}
 {"level":"info","message":"GET /api/customer/hotels/68cc3a8b2ac10d9c703e178f - 127.0.0.1","service":"hotel-booking-api","timestamp":"2025-09-19 10:31:19"}
 {"level":"info","message":"POST /api/customer/bookings - 127.0.0.1","service":"hotel-booking-api","timestamp":"2025-09-19 10:32:59"}
+{"level":"error","message":"Database connection failed: connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017","reason":{"commonWireVersion":0,"compatible":true,"heartbeatFrequencyMS":10000,"localThresholdMS":15,"logicalSessionTimeoutMinutes":null,"maxElectionId":null,"maxSetVersion":null,"servers":{},"setName":null,"stale":false,"type":"Unknown"},"service":"hotel-booking-api","stack":"MongooseServerSelectionError: connect ECONNREFUSED ::1:27017, connect ECONNREFUSED 127.0.0.1:27017\n    at _handleConnectionErrors (/home/vighnesh/Desktop/Hotel-Booking-Portal/backend/node_modules/mongoose/lib/connection.js:816:11)\n    at NativeConnection.openUri (/home/vighnesh/Desktop/Hotel-Booking-Portal/backend/node_modules/mongoose/lib/connection.js:791:11)","timestamp":"2026-01-09 14:03:25"}
+{"code":"ENOTFOUND","hostname":"_mongodb._tcp.cluster0.qavyqv1.mongodb.net","level":"error","message":"Database connection failed: querySrv ENOTFOUND _mongodb._tcp.cluster0.qavyqv1.mongodb.net","service":"hotel-booking-api","stack":"Error: querySrv ENOTFOUND _mongodb._tcp.cluster0.qavyqv1.mongodb.net\n    at QueryReqWrap.onresolve [as oncomplete] (node:internal/dns/promises:293:17)","syscall":"querySrv","timestamp":"2026-01-09 14:04:47"}
+{"level":"info","message":"Connected to MongoDB","service":"hotel-booking-api","timestamp":"2026-01-09 14:09:14"}
+{"level":"info","message":"Server running on port 5000","service":"hotel-booking-api","timestamp":"2026-01-09 14:09:14"}
+{"level":"info","message":"GET /favicon.ico - 127.0.0.1","service":"hotel-booking-api","timestamp":"2026-01-09 14:09:19"}
+{"level":"info","message":"GET /manifest.json - 127.0.0.1","service":"hotel-booking-api","timestamp":"2026-01-09 14:09:19"}
+{"level":"info","message":"GET /manifest.json - 127.0.0.1","service":"hotel-booking-api","timestamp":"2026-01-09 14:12:15"}
+{"level":"info","message":"GET /api/customer/hotels - 127.0.0.1","service":"hotel-booking-api","timestamp":"2026-01-09 14:12:20"}
+{"level":"info","message":"GET /api/customer/hotels - 127.0.0.1","service":"hotel-booking-api","timestamp":"2026-01-09 14:12:20"}
+{"level":"info","message":"GET /manifest.json - 127.0.0.1","service":"hotel-booking-api","timestamp":"2026-01-09 14:12:59"}
+{"level":"info","message":"GET /manifest.json - 127.0.0.1","service":"hotel-booking-api","timestamp":"2026-01-09 14:13:03"}
+{"level":"info","message":"GET /health - ::1","service":"hotel-booking-api","timestamp":"2026-01-09 14:13:12"}
+{"level":"info","message":"GET /favicon.ico - ::1","service":"hotel-booking-api","timestamp":"2026-01-09 14:13:12"}
+{"level":"info","message":"GET /api/health - ::1","service":"hotel-booking-api","timestamp":"2026-01-09 14:13:21"}
+{"level":"info","message":"GET / - ::1","service":"hotel-booking-api","timestamp":"2026-01-09 14:14:58"}
